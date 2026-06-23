@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dugout">
+<title>Dugout</title>
+<style>
+:root {
+  --green: #1a3a1a;
+  --green-mid: #2d5a2d;
+  --green-light: #3d7a3d;
+  --dirt: #c8956c;
+  --dirt-light: #e8b896;
+  --chalk: #f5f0e8;
+  --gold: #f0a500;
+  --red: #c0392b;
+  --go: #27ae60;
+  --gray: #888;
+  --dark: #0d0d0d;
+  --card: #1e3e1e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Georgia, serif;
+  background: var(--dark);
+  color: var(--chalk);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: -webkit-fill-available;
+}
+
+/* NAV */
+.nav-bar {
+  background: var(--dark);
+  border-bottom: 1px solid #333;
+  padding: 12px 16px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+.nav-title { font-size: 1rem; font-weight: 700; letter-spacing: 0.05em; }
+.nav-sub { font-size: 0.65rem; color: var(--dirt-light); font-family: monospace; margin-top: 1px; }
+.nav-btn {
+  background: none; border: none; color: var(--dirt-light);
+  font-size: 0.78rem; font-family: monospace; padding: 6px 10px;
+  border-radius: 6px; cursor: pointer; text-transform: uppercase;
+}
+.nav-btn.primary { background: var(--dirt); color: var(--dark); font-weight: bold; }
+
+/* STEP BAR */
+.step-bar {
+  display: flex; background: #111;
+  border-bottom: 1px solid #333; flex-shrink: 0; overflow-x: auto;
+}
+.step-item {
+  flex: 1; min-width: 58px; padding: 8px 3px;
+  text-align: center; font-family: monospace; font-size: 0.55rem;
+  text-transform: uppercase; letter-spacing: 0.03em; color: #555;
+  border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+}
+.step-item.active { color: var(--dirt-light); border-bottom-color: var(--dirt); }
+.step-item.done { color: var(--go); }
+
+/* SCREENS */
+.screen { display: none; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.screen.active { display: flex; flex-direction: column; }
+.screen-pad { padding: 14px; }
+
+/* SECTION LABEL */
+.section-lbl {
+  font-family: monospace; font-size: 0.62rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--dirt-light); margin: 14px 0 8px;
+}
+.section-lbl:first-child { margin-top: 0; }
+
+/* BANNER */
+.banner {
+  background: #1a1a00; border: 1px solid var(--gold);
+  border-radius: 8px; padding: 10px 14px;
+  font-family: monospace; font-size: 0.72rem; color: var(--gold);
+  margin-bottom: 12px; line-height: 1.5;
+}
+.banner .big { font-size: 0.88rem; font-weight: bold; color: var(--chalk); display: block; margin-bottom: 2px; }
+
+/* CARDS */
+.card { background: var(--card); border: 1px solid var(--green-light); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+.card-row {
+  display: flex; align-items: center;
+  padding: 13px 14px; gap: 12px;
+  border-bottom: 1px solid #2a4a2a;
+}
+.card-row:last-child { border-bottom: none; }
+
+/* DOTS */
+.attend-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #333; border: 2px solid #555;
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; transition: all 0.12s;
+}
+.card-row.here .attend-dot { background: var(--go); border-color: var(--go); }
+.card-row.here .attend-dot::after { content: '✓'; color: white; font-weight: bold; }
+.card-row.selected .attend-dot { background: var(--dirt); border-color: var(--dirt); }
+.card-row.selected .attend-dot::after { content: '✓'; color: var(--dark); font-weight: bold; }
+.attend-name { flex: 1; font-size: 0.95rem; }
+.tag { font-family: monospace; font-size: 0.6rem; padding: 2px 6px; border-radius: 3px; font-weight: bold; }
+.tag-p { background: var(--dirt); color: var(--dark); }
+.tag-here { background: var(--go); color: white; }
+
+/* DEPTH */
+.pos-block { background: var(--card); border: 1px solid var(--green-light); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.pos-block-hdr {
+  background: var(--green-mid); padding: 9px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.pos-lbl { font-family: monospace; font-size: 0.85rem; font-weight: bold; color: var(--dirt-light); }
+.pos-full { font-size: 0.72rem; color: #888; }
+.depth-slot { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #2a4a2a; }
+.depth-slot:last-child { border-bottom: none; }
+.depth-rank { font-family: monospace; font-size: 0.65rem; color: var(--gray); width: 16px; flex-shrink: 0; text-align: center; }
+.depth-select {
+  flex: 1; background: var(--green); border: 1px solid var(--green-light);
+  color: var(--chalk); border-radius: 6px; padding: 8px 10px;
+  font-size: 0.88rem; font-family: inherit; appearance: none;
+}
+.depth-select option { background: #1a3a1a; }
+.add-depth-btn {
+  background: none; border: 1px dashed var(--green-light); color: var(--gray);
+  border-radius: 6px; padding: 8px 14px; font-size: 0.72rem; font-family: monospace;
+  text-transform: uppercase; cursor: pointer; margin: 8px 14px; width: calc(100% - 28px);
+}
+.remove-btn { background: none; border: none; color: #555; font-size: 1rem; padding: 4px; cursor: pointer; flex-shrink: 0; }
+
+/* INNING TABS */
+.inn-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.inn-tab {
+  padding: 8px 14px; border-radius: 20px;
+  font-family: monospace; font-size: 0.72rem; text-transform: uppercase;
+  border: 1px solid var(--green-light); color: var(--gray);
+  background: var(--card); cursor: pointer;
+}
+.inn-tab.active { background: var(--dirt); border-color: var(--dirt); color: var(--dark); font-weight: bold; }
+.inn-tab.filled { border-color: var(--go); color: var(--go); }
+
+/* FIELD ROWS */
+.field-section { margin-bottom: 6px; }
+.field-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.field-pos-lbl {
+  font-family: monospace; font-size: 0.8rem; font-weight: bold;
+  color: var(--dirt-light); width: 32px; flex-shrink: 0; text-align: center;
+}
+.field-pos-lbl.bench { color: #666; font-size: 0.68rem; }
+.pick-btn {
+  flex: 1; background: var(--card); border: 1px solid var(--green-light);
+  border-radius: 8px; padding: 11px 12px; display: flex; align-items: center;
+  justify-content: space-between; cursor: pointer; min-height: 46px;
+}
+.pick-btn.empty { border-style: dashed; border-color: #444; }
+.pick-name { font-size: 0.9rem; color: var(--chalk); }
+.pick-name.empty { color: #555; font-style: italic; font-size: 0.8rem; }
+.pick-right { display: flex; align-items: center; gap: 6px; }
+.pick-inn { font-family: monospace; font-size: 0.62rem; color: var(--gray); }
+.pick-inn.warn { color: var(--gold); }
+.sub-indicator {
+  font-family: monospace; font-size: 0.58rem; background: var(--gold);
+  color: var(--dark); padding: 2px 5px; border-radius: 3px; font-weight: bold;
+}
+.clear-x { background: none; border: none; color: #555; font-size: 0.9rem; padding: 6px; cursor: pointer; flex-shrink: 0; }
+.bench-divider { border-top: 1px dashed #444; margin: 8px 0 4px; }
+
+/* SUB PANEL — expands under a position row */
+.sub-panel {
+  background: #111; border: 1px solid var(--gold);
+  border-radius: 8px; padding: 10px 12px; margin: -2px 0 8px 40px;
+}
+.sub-panel-lbl {
+  font-family: monospace; font-size: 0.6rem; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 8px; letter-spacing: 0.06em;
+}
+.sub-out-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.sub-out-lbl { font-family: monospace; font-size: 0.7rem; color: var(--gray); width: 36px; flex-shrink: 0; }
+.sub-pick-btn {
+  flex: 1; background: var(--card); border: 1px solid #444;
+  border-radius: 6px; padding: 9px 10px; display: flex;
+  align-items: center; justify-content: space-between; cursor: pointer;
+}
+.sub-pick-btn.filled { border-color: var(--green-light); }
+.collapse-sub-btn {
+  background: none; border: 1px solid #444; color: #666;
+  border-radius: 6px; padding: 6px 10px; font-family: monospace;
+  font-size: 0.65rem; cursor: pointer; margin-top: 4px; width: 100%;
+  text-transform: uppercase;
+}
+
+/* MODAL */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75); z-index: 200; align-items: flex-end;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  background: #111; border-top: 2px solid var(--dirt);
+  border-radius: 16px 16px 0 0; width: 100%;
+  max-height: 80vh; overflow-y: auto; padding: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.modal-handle { width: 36px; height: 4px; background: #444; border-radius: 2px; margin: 0 auto 12px; }
+.modal-hdr {
+  font-family: monospace; font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--dirt-light); margin-bottom: 12px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.modal-hdr button { background: none; border: none; color: #666; font-size: 1.2rem; cursor: pointer; }
+.modal-sec { font-family: monospace; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin: 10px 0 6px; }
+.opt-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--card); border: 1px solid var(--green-light);
+  border-radius: 8px; padding: 13px 14px; margin-bottom: 6px;
+  cursor: pointer; min-height: 50px;
+}
+.opt-row:active { opacity: 0.7; }
+.opt-row.depth-opt { border-color: var(--dirt); }
+.opt-row.current { border-color: var(--gold); }
+.opt-name { font-size: 0.95rem; }
+.opt-right { text-align: right; }
+.opt-badge { font-family: monospace; font-size: 0.58rem; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; display: inline-block; }
+.opt-badge.depth { background: var(--dirt); color: var(--dark); }
+.opt-badge.other { background: #333; color: #888; }
+.opt-inn { font-family: monospace; font-size: 0.65rem; color: var(--gray); margin-top: 2px; }
+.opt-inn.warn { color: var(--gold); }
+.clear-row {
+  background: #1a1a1a; border: 1px solid #444; border-radius: 8px;
+  padding: 11px 14px; margin-bottom: 6px; cursor: pointer;
+  text-align: center; font-family: monospace; font-size: 0.72rem; color: #666; text-transform: uppercase;
+}
+
+/* TRACKER */
+.tracker-row {
+  display: grid; grid-template-columns: 1fr 42px 42px 42px 42px;
+  gap: 4px; padding: 10px 12px; background: var(--card);
+  border: 1px solid var(--green-light); border-radius: 8px; margin-bottom: 6px;
+  font-size: 0.78rem; align-items: center;
+}
+.tracker-row.hdr { background: #1a1a1a; border-color: #333; font-family: monospace; font-size: 0.58rem; text-transform: uppercase; color: var(--dirt-light); }
+.t-name { font-weight: 600; }
+.t-num { text-align: center; font-family: monospace; }
+.t-flag { font-size: 0.62rem; color: var(--gold); padding: 0 12px 6px; margin-top: -4px; }
+
+/* BOTTOM NAV */
+.bottom-nav {
+  display: flex; background: var(--dark); border-top: 1px solid #333;
+  flex-shrink: 0; padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+.bnav-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 8px 4px; background: none; border: none; cursor: pointer;
+  color: #555; font-size: 0.55rem; font-family: monospace;
+  text-transform: uppercase; letter-spacing: 0.03em; gap: 3px;
+}
+.bnav-btn.active { color: var(--dirt-light); }
+.bnav-icon { font-size: 1.1rem; }
+
+/* BUTTONS */
+.big-btn {
+  width: 100%; background: var(--dirt); color: var(--dark);
+  border: none; border-radius: 10px; padding: 14px;
+  font-size: 0.9rem; font-weight: bold; font-family: monospace;
+  text-transform: uppercase; cursor: pointer; margin-top: 8px;
+}
+.big-btn.secondary { background: var(--green-mid); color: var(--chalk); border: 1px solid var(--green-light); }
+.name-input {
+  flex: 1; background: var(--green-mid); border: 1px solid var(--green-light);
+  color: var(--chalk); border-radius: 6px; padding: 8px 10px;
+  font-size: 0.9rem; font-family: inherit;
+}
+</style>
+</head>
+<body>
+
+<div class="nav-bar">
+  <div>
+    <div class="nav-title">⚾ Dugout</div>
+    <div class="nav-sub" id="nav-sub">HV Hawks 10U · v2.0</div>
+  </div>
+  <button class="nav-btn primary" onclick="navAction()">Next →</button>
+</div>
+
+<div class="step-bar">
+  <div class="step-item" onclick="goScreen('attendance')">1·Roster</div>
+  <div class="step-item" onclick="goScreen('depth')">2·Depth</div>
+  <div class="step-item" onclick="goScreen('pitching')">3·Pitch</div>
+  <div class="step-item" onclick="goScreen('game')">4·Game</div>
+  <div class="step-item" onclick="goScreen('tracker')">5·Stats</div>
+</div>
+
+<!-- SCREEN 1: ATTENDANCE -->
+<div class="screen active" id="screen-attendance">
+  <div class="screen-pad">
+    <div class="banner" id="attend-banner"><span class="big">Mark who's here today</span>Tap each player attending this game.</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="big-btn secondary" style="margin-top:0;flex:1" onclick="setAllAttend(true)">All Here</button>
+      <button class="big-btn secondary" style="margin-top:0;flex:1" onclick="setAllAttend(false)">Clear</button>
+      <button class="big-btn secondary" style="margin-top:0;flex:1;font-size:0.75rem" onclick="goScreen('roster')">✏️ Edit Roster</button>
+    </div>
+    <div class="card" id="attend-list"></div>
+  </div>
+</div>
+
+<!-- ROSTER EDITOR -->
+<div class="screen" id="screen-roster">
+  <div class="screen-pad">
+    <div class="section-lbl">Player Names</div>
+    <div id="roster-edit-list"></div>
+    <button class="big-btn" onclick="goScreen('attendance')">← Done</button>
+  </div>
+</div>
+
+<!-- SCREEN 2: DEPTH CHART -->
+<div class="screen" id="screen-depth">
+  <div class="screen-pad">
+    <div class="section-lbl">Position Depth Chart</div>
+    <div style="font-family:monospace;font-size:0.65rem;color:var(--gray);margin-bottom:12px">Saved permanently. Top of list = first choice. Used to suggest players in the lineup.</div>
+    <div id="depth-chart"></div>
+  </div>
+</div>
+
+<!-- SCREEN 3: PITCHING -->
+<div class="screen" id="screen-pitching">
+  <div class="screen-pad">
+    <div class="banner" id="pitch-banner"><span class="big">Who can pitch today?</span>Select from players attending this game.</div>
+    <div class="card" id="pitch-list"></div>
+  </div>
+</div>
+
+<!-- SCREEN 4: GAME -->
+<div class="screen" id="screen-game">
+  <div class="screen-pad">
+    <div class="inn-tabs" id="inn-tabs"></div>
+    <div id="inn-field"></div>
+  </div>
+</div>
+
+<!-- SCREEN 5: TRACKER -->
+<div class="screen" id="screen-tracker">
+  <div class="screen-pad">
+    <div class="section-lbl">Playing Time</div>
+    <div class="tracker-row hdr">
+      <span>Player</span><span class="t-num">Play</span><span class="t-num">Sit</span><span class="t-num">IF</span><span class="t-num">OF</span>
+    </div>
+    <div id="tracker-list"></div>
+  </div>
+</div>
+
+<!-- PICKER MODAL -->
+<div class="modal-overlay" id="pick-modal" onclick="closePickBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-hdr">
+      <span id="pick-title">Select Player</span>
+      <button onclick="closePick()">✕</button>
+    </div>
+    <div id="pick-body"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <button class="bnav-btn active" id="bnav-attendance" onclick="goScreen('attendance')"><span class="bnav-icon">👥</span>Roster</button>
+  <button class="bnav-btn" id="bnav-depth" onclick="goScreen('depth')"><span class="bnav-icon">📋</span>Depth</button>
+  <button class="bnav-btn" id="bnav-pitching" onclick="goScreen('pitching')"><span class="bnav-icon">⚾</span>Pitch</button>
+  <button class="bnav-btn" id="bnav-game" onclick="goScreen('game')"><span class="bnav-icon">🏟</span>Game</button>
+  <button class="bnav-btn" id="bnav-tracker" onclick="goScreen('tracker')"><span class="bnav-icon">📊</span>Stats</button>
+</div>
+
+<script>
+// ── CONSTANTS ──────────────────────────────────────────
+const POSITIONS = ['P','C','1B','2B','3B','SS','LF','CF','RF'];
+const POS_FULL  = {P:'Pitcher',C:'Catcher','1B':'First','2B':'Second','3B':'Third',SS:'Shortstop',LF:'Left',CF:'Center',RF:'Right'};
+const INFIELD   = ['P','C','1B','2B','3B','SS'];
+const OUTFIELD  = ['LF','CF','RF'];
+const INNINGS   = 6;
+const MAX       = 15;
+
+function uid() { return Math.random().toString(36).slice(2,8); }
+function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch(e) { return null; } }
+
+// ── STATE ──────────────────────────────────────────────
+let roster     = load('dg_roster') || Array.from({length:13},()=>({id:uid(),name:''}));
+let attending  = new Set(load('dg_attend') || []);
+let pitchAvail = new Set(load('dg_pitch')  || []);
+let depth      = load('dg_depth')  || {};
+// lineup[inning][pos] = playerId  — main inning lineup
+// subs[inning][pos][out] = playerId  — mid-inning per-position subs
+let lineup     = load('dg_lineup') || {};
+let subs       = load('dg_subs')   || {};
+// which positions have sub panel open
+let openSubs   = {};
+let currentInning = 1;
+let pickCtx    = null;
+
+function save() {
+  localStorage.setItem('dg_roster',  JSON.stringify(roster));
+  localStorage.setItem('dg_attend',  JSON.stringify([...attending]));
+  localStorage.setItem('dg_pitch',   JSON.stringify([...pitchAvail]));
+  localStorage.setItem('dg_depth',   JSON.stringify(depth));
+  localStorage.setItem('dg_lineup',  JSON.stringify(lineup));
+  localStorage.setItem('dg_subs',    JSON.stringify(subs));
+}
+
+// ── HELPERS ────────────────────────────────────────────
+function getActiveRoster()  { return roster.filter(p => p.name && attending.has(p.id)); }
+function getAllNamed()       { return roster.filter(p => p.name); }
+function getBenchCount()    { return Math.max(0, getActiveRoster().length - POSITIONS.length); }
+function pName(id)          { return roster.find(p=>p.id===id)?.name || ''; }
+
+// Get the effective player for inning/pos — carry forward from previous inning
+function getLineupVal(inning, pos) {
+  for (let i = inning; i >= 1; i--) {
+    const v = lineup[i]?.[pos];
+    if (v) return v;
+  }
+  return '';
+}
+
+// Get sub val for a specific out (carry forward within inning)
+function getSubVal(inning, pos, out) {
+  for (let o = out; o >= 1; o--) {
+    const v = subs[inning]?.[pos]?.[o];
+    if (v) return v;
+  }
+  return getLineupVal(inning, pos);
+}
+
+function hasSubForPos(inning, pos) {
+  return subs[inning]?.[pos] && Object.keys(subs[inning][pos]).length > 0;
+}
+
+// Who's assigned this inning (at inning level, excluding pos)
+function getAssignedInning(inning, excludePos) {
+  const rows = [...POSITIONS, ...Array.from({length:getBenchCount()},(_,i)=>'BENCH'+(i+1))];
+  const assigned = new Set();
+  rows.forEach(p => {
+    if (p === excludePos) return;
+    const v = getLineupVal(inning, p);
+    if (v) assigned.add(v);
+  });
+  return assigned;
+}
+
+// Who's assigned for a specific out (excluding pos)
+function getAssignedOut(inning, out, excludePos) {
+  const rows = [...POSITIONS, ...Array.from({length:getBenchCount()},(_,i)=>'BENCH'+(i+1))];
+  const assigned = new Set();
+  rows.forEach(p => {
+    if (p === excludePos) return;
+    const v = getSubVal(inning, p, out);
+    if (v) assigned.add(v);
+  });
+  return assigned;
+}
+
+function getPlayerInnings(pid) {
+  let count = 0;
+  for (let i = 1; i <= INNINGS; i++) {
+    if (POSITIONS.some(p => getLineupVal(i,p) === pid)) count++;
+  }
+  return count;
+}
+
+// ── NAVIGATION ─────────────────────────────────────────
+const NAV_ORDER = ['attendance','depth','pitching','game','tracker'];
+const NAV_NEXT  = {attendance:'depth',depth:'pitching',pitching:'game',game:'tracker',tracker:'game',roster:'attendance'};
+let currentScreen = 'attendance';
+
+function goScreen(name) {
+  currentScreen = name;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-'+name)?.classList.add('active');
+  const navIdx = NAV_ORDER.indexOf(name);
+  document.querySelectorAll('.step-item').forEach((el,i) => {
+    el.classList.remove('active','done');
+    if (i === navIdx) el.classList.add('active');
+    else if (i < navIdx) el.classList.add('done');
+  });
+  NAV_ORDER.forEach(s => document.getElementById('bnav-'+s)?.classList.toggle('active', s===name));
+  if (name==='attendance') renderAttendance();
+  if (name==='roster')     renderRosterEdit();
+  if (name==='depth')      renderDepth();
+  if (name==='pitching')   renderPitching();
+  if (name==='game')       renderGame();
+  if (name==='tracker')    renderTracker();
+}
+
+function navAction() { goScreen(NAV_NEXT[currentScreen]||'attendance'); }
+
+// ── ATTENDANCE ─────────────────────────────────────────
+function renderAttendance() {
+  const named = getAllNamed();
+  const list  = document.getElementById('attend-list');
+  if (!named.length) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray);font-family:monospace;font-size:0.8rem">No players yet — tap ✏️ Edit Roster.</div>';
+  } else {
+    list.innerHTML = named.map(p => `
+      <div class="card-row ${attending.has(p.id)?'here':''}" onclick="toggleAttend('${p.id}')">
+        <div class="attend-dot"></div>
+        <span class="attend-name">${p.name}</span>
+        ${pitchAvail.has(p.id)?'<span class="tag tag-p">P</span>':''}
+      </div>`).join('');
+  }
+  updateAttendBanner();
+}
+
+function toggleAttend(id) {
+  attending.has(id) ? attending.delete(id) : attending.add(id);
+  save(); renderAttendance();
+}
+
+function setAllAttend(val) {
+  if (val) getAllNamed().forEach(p=>attending.add(p.id));
+  else attending.clear();
+  save(); renderAttendance();
+}
+
+function updateAttendBanner() {
+  const n = getActiveRoster().length;
+  const el = document.getElementById('attend-banner');
+  if (!n) { el.innerHTML = '<span class="big">No players checked in</span>Tap names to mark who\'s here.'; return; }
+  if (n <= 9) { el.innerHTML = `<span class="big">${n} players today</span>Full field — no one sits.`; return; }
+  const benched  = (n * INNINGS) - (9 * INNINGS);
+  const evenSit  = Math.floor(benched / n);
+  const extra    = benched - (evenSit * n);
+  const baseCount = n - extra;
+  const msg = extra === 0
+    ? `Everyone sits ${evenSit} inning${evenSit!==1?'s':''}.`
+    : `${baseCount} kid${baseCount!==1?'s':''} sit ${evenSit} · ${extra} kid${extra!==1?'s':''} sit ${evenSit+1}.`;
+  el.innerHTML = `<span class="big">${n} players today</span>${msg}`;
+}
+
+// ── ROSTER EDITOR ──────────────────────────────────────
+function renderRosterEdit() {
+  while (roster.length < MAX) roster.push({id:uid(),name:''});
+  document.getElementById('roster-edit-list').innerHTML = roster.slice(0,MAX).map((p,i)=>`
+    <div class="card-row" style="background:var(--card);border-bottom:1px solid #2a4a2a;padding:10px 14px">
+      <span style="font-family:monospace;font-size:0.7rem;color:var(--gray);width:18px">${i+1}</span>
+      <input class="name-input" value="${p.name.replace(/"/g,'&quot;')}" placeholder="Player ${i+1}" oninput="updateName('${p.id}',this.value)">
+    </div>`).join('');
+}
+
+function updateName(id, val) {
+  const p = roster.find(r=>r.id===id);
+  if (p) p.name = val.trim();
+  save();
+}
+
+// ── DEPTH CHART ────────────────────────────────────────
+function renderDepth() {
+  const all = getAllNamed(); // full roster for depth — not just attending
+  document.getElementById('depth-chart').innerHTML = POSITIONS.map(pos => {
+    const slots = depth[pos] || [];
+    const slotsHtml = slots.map((pid,idx) => `
+      <div class="depth-slot">
+        <span class="depth-rank">${idx+1}</span>
+        <select class="depth-select" onchange="updateDepth('${pos}',${idx},this.value)">
+          <option value="">— none —</option>
+          ${all.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${p.name}</option>`).join('')}
+        </select>
+        <button class="remove-btn" onclick="removeDepth('${pos}',${idx})">✕</button>
+      </div>`).join('');
+    return `
+      <div class="pos-block">
+        <div class="pos-block-hdr">
+          <span class="pos-lbl">${pos}</span>
+          <span class="pos-full">${POS_FULL[pos]||''}</span>
+        </div>
+        ${slotsHtml}
+        <button class="add-depth-btn" onclick="addDepth('${pos}')">+ Add Option</button>
+      </div>`;
+  }).join('');
+}
+
+function addDepth(pos)          { if(!depth[pos])depth[pos]=[]; depth[pos].push(''); save(); renderDepth(); }
+function removeDepth(pos,idx)   { depth[pos]?.splice(idx,1); save(); renderDepth(); }
+function updateDepth(pos,idx,v) { if(!depth[pos])depth[pos]=[]; depth[pos][idx]=v; save(); }
+
+// ── PITCHING ───────────────────────────────────────────
+function renderPitching() {
+  const active = getActiveRoster();
+  const el = document.getElementById('pitch-list');
+  if (!active.length) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray);font-family:monospace;font-size:0.8rem">Mark attendance first.</div>';
+    return;
+  }
+  el.innerHTML = active.map(p=>`
+    <div class="card-row ${pitchAvail.has(p.id)?'selected':''}" onclick="togglePitch('${p.id}')">
+      <div class="attend-dot"></div>
+      <span class="attend-name">${p.name}</span>
+    </div>`).join('');
+
+  const n = pitchAvail.size;
+  document.getElementById('pitch-banner').innerHTML = n
+    ? `<span class="big">${n} pitcher${n!==1?'s':''} available today</span>These players will appear first when you assign pitcher.`
+    : `<span class="big">Who can pitch today?</span>Tap players who are available to throw.`;
+}
+
+function togglePitch(id) {
+  pitchAvail.has(id) ? pitchAvail.delete(id) : pitchAvail.add(id);
+  save(); renderPitching();
+}
+
+// ── GAME SCREEN ────────────────────────────────────────
+function renderGame() {
+  // inning tabs
+  const tabsEl = document.getElementById('inn-tabs');
+  tabsEl.innerHTML = '';
+  for (let i=1;i<=INNINGS;i++) {
+    const filled = POSITIONS.some(p=>lineup[i]?.[p]);
+    const btn = document.createElement('button');
+    btn.className = `inn-tab ${i===currentInning?'active':''} ${filled&&i!==currentInning?'filled':''}`;
+    btn.textContent = `Inn ${i}`;
+    btn.onclick = ()=>{ currentInning=i; openSubs={}; renderGame(); };
+    tabsEl.appendChild(btn);
+  }
+  renderInnField();
+}
+
+function renderInnField() {
+  const el = document.getElementById('inn-field');
+  const benchCount = getBenchCount();
+  let html = '';
+
+  POSITIONS.forEach(pos => { html += buildPosRow(pos); });
+  if (benchCount > 0) {
+    html += '<div class="bench-divider"></div>';
+    for (let b=1;b<=benchCount;b++) html += buildPosRow('BENCH'+b);
+  }
+
+  el.innerHTML = html;
+}
+
+function buildPosRow(pos) {
+  const isBench = pos.startsWith('BENCH');
+  const val     = getLineupVal(currentInning, pos);
+  const name    = val ? pName(val) : '';
+  const hasSub  = hasSubForPos(currentInning, pos);
+  const inn     = val ? getPlayerInnings(val) : 0;
+  const warn    = inn >= INNINGS - 1;
+  const label   = isBench ? pos.replace('BENCH','B') : pos;
+  const subOpen = openSubs[pos];
+
+  let html = `
+    <div class="field-row">
+      <span class="field-pos-lbl ${isBench?'bench':''}">${label}</span>
+      <button class="pick-btn ${name?'':'empty'}" onclick="openPick('${pos}',${currentInning},null)">
+        <span class="pick-name ${name?'':'empty'}">${name||'tap to assign'}</span>
+        <div class="pick-right">
+          ${hasSub ? '<span class="sub-indicator">SUB</span>' : ''}
+          ${name ? `<span class="pick-inn ${warn?'warn':''}">${inn}inn</span>` : ''}
+        </div>
+      </button>
+      ${name ? `<button class="clear-x" onclick="clearPos('${pos}',${currentInning})">✕</button>` : ''}
+      ${name && !isBench ? `<button style="background:none;border:1px solid #444;color:${subOpen?'var(--gold)':'#555'};border-radius:6px;padding:6px 8px;font-size:0.65rem;cursor:pointer;font-family:monospace;white-space:nowrap" onclick="toggleSubPanel('${pos}')">
+        ${subOpen ? '▲ sub' : '▼ sub'}
+      </button>` : ''}
+    </div>`;
+
+  // Sub panel for this position
+  if (subOpen && name && !isBench) {
+    html += `
+      <div class="sub-panel">
+        <div class="sub-panel-lbl">Mid-inning sub for ${POS_FULL[pos]||pos}</div>
+        ${[1,2,3].map(out => {
+          const subVal  = subs[currentInning]?.[pos]?.[out] || '';
+          const subName = subVal ? pName(subVal) : '';
+          const carried = !subVal ? getSubVal(currentInning,pos,out) : '';
+          const carriedName = carried ? pName(carried) : '';
+          return `
+            <div class="sub-out-row">
+              <span class="sub-out-lbl">Out ${out}</span>
+              <button class="sub-pick-btn ${subName?'filled':''}" onclick="openPick('${pos}',${currentInning},${out})">
+                <span style="font-size:0.85rem;color:${subName?'var(--chalk)':carriedName?'#666':'#444'};font-style:${!subName&&carriedName?'italic':'normal'}">
+                  ${subName || (carriedName ? carriedName+' ↩' : 'tap to sub')}
+                </span>
+                ${subName ? `<span style="font-family:monospace;font-size:0.6rem;color:var(--gold)">change</span>` : ''}
+              </button>
+              ${subName ? `<button class="clear-x" onclick="clearSub('${pos}',${currentInning},${out})">✕</button>` : ''}
+            </div>`;
+        }).join('')}
+        <button class="collapse-sub-btn" onclick="toggleSubPanel('${pos}')">▲ close</button>
+      </div>`;
+  }
+
+  return html;
+}
+
+function toggleSubPanel(pos) {
+  openSubs[pos] = !openSubs[pos];
+  renderInnField();
+}
+
+function clearPos(pos, inning) {
+  if (lineup[inning]) delete lineup[inning][pos];
+  save(); renderInnField();
+}
+
+function clearSub(pos, inning, out) {
+  if (subs[inning]?.[pos]) delete subs[inning][pos][out];
+  save(); renderInnField();
+}
+
+// ── PICKER MODAL ───────────────────────────────────────
+function openPick(pos, inning, out) {
+  pickCtx = {pos, inning, out};
+  const isOut   = out !== null;
+  const posLbl  = pos.startsWith('BENCH') ? pos.replace('BENCH','Bench ') : POS_FULL[pos]||pos;
+  const outLbl  = isOut ? ` · Out ${out}` : '';
+  document.getElementById('pick-title').textContent = `${posLbl} · Inn ${inning}${outLbl}`;
+
+  const active   = getActiveRoster();
+  const assigned = isOut ? getAssignedOut(inning,out,pos) : getAssignedInning(inning,pos);
+  const curVal   = isOut
+    ? (subs[inning]?.[pos]?.[out] || '')
+    : (lineup[inning]?.[pos] || '');
+  const curName  = curVal ? pName(curVal) : '';
+
+  // Depth chart ids for this pos — for pitchers filter by pitchAvail
+  const depthIds = (depth[pos]||[]).filter(id=>id);
+  const isBench  = pos.startsWith('BENCH');
+
+  // For bench: show anyone not assigned
+  // For positions: show depth first, then others
+  const depthPlayers  = isBench ? [] : active.filter(p=>depthIds.includes(p.id) && !assigned.has(p.id) && p.id!==curVal);
+  const otherPlayers  = active.filter(p=>!depthIds.includes(p.id) && !assigned.has(p.id) && p.id!==curVal);
+  const allAvailable  = isBench ? active.filter(p=>!assigned.has(p.id)&&p.id!==curVal) : null;
+
+  let html = '';
+  if (curVal) {
+    html += `<div class="opt-row current" onclick="assignPlayer('')">
+      <span class="opt-name">✓ ${curName}</span>
+      <span class="opt-badge" style="background:#333;color:#888">Clear</span>
+    </div>`;
+  }
+
+  if (isBench) {
+    if (allAvailable.length) {
+      html += `<div class="modal-sec">Available</div>`;
+      allAvailable.forEach(p => html += optRow(p, 'other'));
+    }
+  } else {
+    if (depthPlayers.length) {
+      html += `<div class="modal-sec">Depth Chart</div>`;
+      depthPlayers.forEach(p => html += optRow(p, 'depth'));
+    }
+    if (otherPlayers.length) {
+      html += `<div class="modal-sec">${depthPlayers.length?'Everyone Else':'All Players'}</div>`;
+      otherPlayers.forEach(p => html += optRow(p, 'other'));
+    }
+  }
+
+  if (!depthPlayers.length && !otherPlayers.length && !allAvailable?.length && !curVal) {
+    html = '<div style="text-align:center;color:var(--gray);font-family:monospace;padding:20px;font-size:0.8rem">Everyone is already assigned.</div>';
+  }
+
+  document.getElementById('pick-body').innerHTML = html;
+  document.getElementById('pick-modal').classList.add('open');
+}
+
+function optRow(p, badge) {
+  const inn  = getPlayerInnings(p.id);
+  const warn = inn >= INNINGS - 1;
+  return `<div class="opt-row ${badge==='depth'?'depth-opt':''}" onclick="assignPlayer('${p.id}')">
+    <span class="opt-name">${p.name}</span>
+    <div class="opt-right">
+      <span class="opt-badge ${badge}">${badge==='depth'?'Depth':'Other'}</span>
+      <div class="opt-inn ${warn?'warn':''}">${inn} inn played</div>
+    </div>
+  </div>`;
+}
+
+function assignPlayer(pid) {
+  if (!pickCtx) return;
+  const {pos, inning, out} = pickCtx;
+  if (out === null) {
+    if (!lineup[inning]) lineup[inning] = {};
+    if (pid) lineup[inning][pos] = pid;
+    else delete lineup[inning][pos];
+  } else {
+    if (!subs[inning]) subs[inning] = {};
+    if (!subs[inning][pos]) subs[inning][pos] = {};
+    if (pid) subs[inning][pos][out] = pid;
+    else delete subs[inning][pos][out];
+  }
+  save(); closePick(); renderInnField();
+}
+
+function closePick()      { document.getElementById('pick-modal').classList.remove('open'); pickCtx=null; }
+function closePickBg(e)   { if(e.target.id==='pick-modal') closePick(); }
+
+// ── TRACKER ────────────────────────────────────────────
+function renderTracker() {
+  const active = getActiveRoster();
+  const stats  = {};
+  active.forEach(p=>stats[p.id]={name:p.name,played:0,sat:0,infield:0,outfield:0});
+
+  for (let i=1;i<=INNINGS;i++) {
+    const benchCount = getBenchCount();
+    POSITIONS.forEach(pos=>{
+      const v = getLineupVal(i,pos);
+      if (v&&stats[v]) { stats[v].played++; if(INFIELD.includes(pos))stats[v].infield++; if(OUTFIELD.includes(pos))stats[v].outfield++; }
+    });
+    for (let b=1;b<=benchCount;b++) {
+      const v = getLineupVal(i,'BENCH'+b);
+      if (v&&stats[v]) stats[v].sat++;
+    }
+  }
+
+  const sorted = Object.values(stats).sort((a,b)=>b.played-a.played);
+  let html = '';
+  sorted.forEach(s=>{
+    let flag='';
+    if (s.played===0&&s.sat===0) flag='';
+    else if (s.played===0) flag='⚠ Hasn\'t played yet';
+    else if (s.outfield===0&&s.played>=3) flag='⚠ No OF reps yet';
+    else if (s.infield===0&&s.played>=3) flag='⚠ No IF reps yet';
+    html += `<div class="tracker-row">
+      <span class="t-name">${s.name}</span>
+      <span class="t-num">${s.played}</span>
+      <span class="t-num">${s.sat}</span>
+      <span class="t-num">${s.infield}</span>
+      <span class="t-num">${s.outfield}</span>
+    </div>`;
+    if(flag) html+=`<div class="t-flag">${flag}</div>`;
+  });
+  document.getElementById('tracker-list').innerHTML = html||'<div style="text-align:center;color:var(--gray);font-family:monospace;padding:20px;font-size:0.8rem">Fill out the lineup first.</div>';
+}
+
+// ── INIT ───────────────────────────────────────────────
+goScreen('attendance');
+</script>
+</body>
+</html>
