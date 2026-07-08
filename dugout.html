@@ -287,17 +287,16 @@ body {
 <div class="nav-bar">
   <div>
     <div class="nav-title">⚾ Dugout</div>
-    <div class="nav-sub" id="nav-sub">HV Hawks 10U · v2.1</div>
+    <div class="nav-sub" id="nav-sub">HV Hawks 10U · v2.2</div>
   </div>
   <button class="nav-btn primary" onclick="navAction()">Next →</button>
 </div>
 
 <div class="step-bar">
   <div class="step-item" onclick="goScreen('attendance')">1·Roster</div>
-  <div class="step-item" onclick="goScreen('depth')">2·Depth</div>
-  <div class="step-item" onclick="goScreen('pitching')">3·Pitch</div>
-  <div class="step-item" onclick="goScreen('game')">4·Game</div>
-  <div class="step-item" onclick="goScreen('tracker')">5·Stats</div>
+  <div class="step-item" onclick="goScreen('pitching')">2·Pitch</div>
+  <div class="step-item" onclick="goScreen('game')">3·Game</div>
+  <div class="step-item" onclick="goScreen('tracker')">4·Stats</div>
 </div>
 
 <!-- SCREEN 1: ATTENDANCE -->
@@ -323,15 +322,6 @@ body {
     <div class="section-lbl">Player Names</div>
     <div id="roster-edit-list"></div>
     <button class="big-btn" onclick="goScreen('attendance')">← Done</button>
-  </div>
-</div>
-
-<!-- SCREEN 2: DEPTH CHART -->
-<div class="screen" id="screen-depth">
-  <div class="screen-pad">
-    <div class="section-lbl">Position Depth Chart</div>
-    <div style="font-family:monospace;font-size:0.65rem;color:var(--gray);margin-bottom:12px">Saved permanently. Top of list = first choice. Used to suggest players in the lineup.</div>
-    <div id="depth-chart"></div>
   </div>
 </div>
 
@@ -377,7 +367,6 @@ body {
 <!-- BOTTOM NAV -->
 <div class="bottom-nav">
   <button class="bnav-btn active" id="bnav-attendance" onclick="goScreen('attendance')"><span class="bnav-icon">👥</span>Roster</button>
-  <button class="bnav-btn" id="bnav-depth" onclick="goScreen('depth')"><span class="bnav-icon">📋</span>Depth</button>
   <button class="bnav-btn" id="bnav-pitching" onclick="goScreen('pitching')"><span class="bnav-icon">⚾</span>Pitch</button>
   <button class="bnav-btn" id="bnav-game" onclick="goScreen('game')"><span class="bnav-icon">🏟</span>Game</button>
   <button class="bnav-btn" id="bnav-tracker" onclick="goScreen('tracker')"><span class="bnav-icon">📊</span>Stats</button>
@@ -459,7 +448,7 @@ function getAssignedInning(inning, excludePos) {
   rows.forEach(p => {
     if (p === excludePos) return;
     const v = getLineupVal(inning, p);
-    if (v) assigned.add(v);
+    if (v && v !== 'EMPTY') assigned.add(v);
   });
   return assigned;
 }
@@ -471,7 +460,7 @@ function getAssignedOut(inning, out, excludePos) {
   rows.forEach(p => {
     if (p === excludePos) return;
     const v = getSubVal(inning, p, out);
-    if (v) assigned.add(v);
+    if (v && v !== 'EMPTY') assigned.add(v);
   });
   return assigned;
 }
@@ -485,8 +474,8 @@ function getPlayerInnings(pid) {
 }
 
 // ── NAVIGATION ─────────────────────────────────────────
-const NAV_ORDER = ['attendance','depth','pitching','game','tracker'];
-const NAV_NEXT  = {attendance:'depth',depth:'pitching',pitching:'game',game:'tracker',tracker:'game',roster:'attendance'};
+const NAV_ORDER = ['attendance','pitching','game','tracker'];
+const NAV_NEXT  = {attendance:'pitching',pitching:'game',game:'tracker',tracker:'game',roster:'attendance'};
 let currentScreen = 'attendance';
 
 function goScreen(name) {
@@ -502,7 +491,6 @@ function goScreen(name) {
   NAV_ORDER.forEach(s => document.getElementById('bnav-'+s)?.classList.toggle('active', s===name));
   if (name==='attendance') renderAttendance();
   if (name==='roster')     renderRosterEdit();
-  if (name==='depth')      renderDepth();
   if (name==='pitching')   renderPitching();
   if (name==='game')       renderGame();
   if (name==='tracker')    renderTracker();
@@ -602,24 +590,21 @@ function updateDepth(pos,idx,v) { if(!depth[pos])depth[pos]=[]; depth[pos][idx]=
 // ── PITCHING ───────────────────────────────────────────
 function renderPitching() {
   const active = getActiveRoster();
-  // Only show players who are in the depth chart for P
-  const depthPitcherIds = (depth['P'] || []).filter(id => id);
-  const pitchers = active.filter(p => depthPitcherIds.includes(p.id));
   const el = document.getElementById('pitch-list');
-  if (!pitchers.length) {
-    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray);font-family:monospace;font-size:0.8rem">No pitchers in depth chart yet — add players to the P slot in Depth Chart first.</div>';
-    document.getElementById('pitch-banner').innerHTML = '<span class="big">No pitchers set up</span>Go to Depth Chart and add players to the P position first.';
+  if (!active.length) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray);font-family:monospace;font-size:0.8rem">Mark attendance first.</div>';
+    document.getElementById('pitch-banner').innerHTML = '<span class="big">No players checked in</span>Go to Roster and mark who\'s here today first.';
     return;
   }
-  el.innerHTML = pitchers.map(p=>`
+  el.innerHTML = active.map(p=>`
     <div class="card-row ${pitchAvail.has(p.id)?'selected':''}" onclick="togglePitch('${p.id}')">
       <div class="attend-dot"></div>
       <span class="attend-name">${p.name}</span>
     </div>`).join('');
 
-  const n = [...pitchAvail].filter(id => depthPitcherIds.includes(id)).size;
+  const n = pitchAvail.size;
   document.getElementById('pitch-banner').innerHTML = n
-    ? `<span class="big">${n} pitcher${n!==1?'s':''} available today</span>These players will appear first when you assign pitcher.`
+    ? `<span class="big">${n} pitcher${n!==1?'s':''} available today</span>These will appear first when you assign the pitcher slot.`
     : `<span class="big">Who can pitch today?</span>Tap players who are available to throw.`;
 }
 
@@ -746,15 +731,11 @@ function openPick(pos, inning, out) {
   // Check if value is carried from a previous inning (not explicitly set this inning)
   const isCarried = !isOut && !pos.startsWith('BENCH') && !lineup[inning]?.[pos] && curVal !== '';
 
-  // Depth chart ids for this pos — for pitchers filter by pitchAvail
-  const depthIds = (depth[pos]||[]).filter(id=>id);
-  const isBench  = pos.startsWith('BENCH');
-
-  // For bench: show anyone not assigned
-  // For positions: show depth first, then others
-  const depthPlayers  = isBench ? [] : active.filter(p=>depthIds.includes(p.id) && !assigned.has(p.id) && p.id!==curVal);
-  const otherPlayers  = active.filter(p=>!depthIds.includes(p.id) && !assigned.has(p.id) && p.id!==curVal);
-  const allAvailable  = isBench ? active.filter(p=>!assigned.has(p.id)&&p.id!==curVal) : null;
+  // Build available list — everyone attending not already assigned
+  const available = active.filter(p => !assigned.has(p.id) && p.id !== curVal);
+  const pitchers  = available.filter(p => pitchAvail.has(p.id));
+  const nonPitchers = available.filter(p => !pitchAvail.has(p.id));
+  const isPitcherSlot = pos === 'P';
 
   let html = '';
 
@@ -765,23 +746,42 @@ function openPick(pos, inning, out) {
     </div>`;
   }
 
-  if (isBench) {
-    if (allAvailable.length) {
-      html += `<div class="modal-sec">Available</div>`;
-      allAvailable.forEach(p => html += optRow(p, 'other'));
+  if (isPitcherSlot && pitchers.length) {
+    html += `<div class="modal-sec">Available to Pitch Today</div>`;
+    pitchers.forEach(p => {
+      const inn  = getPlayerInnings(p.id);
+      const warn = inn >= INNINGS - 1;
+      html += `<div class="opt-row depth-opt" onclick="assignPlayer('${p.id}')">
+        <span class="opt-name">${p.name}</span>
+        <div class="opt-right"><div class="opt-inn ${warn?'warn':''}">${inn} inn played</div></div>
+      </div>`;
+    });
+    if (nonPitchers.length) {
+      html += `<div class="modal-sec">Everyone Else</div>`;
+      nonPitchers.forEach(p => {
+        const inn  = getPlayerInnings(p.id);
+        const warn = inn >= INNINGS - 1;
+        html += `<div class="opt-row" onclick="assignPlayer('${p.id}')">
+          <span class="opt-name">${p.name}</span>
+          <div class="opt-right"><div class="opt-inn ${warn?'warn':''}">${inn} inn played</div></div>
+        </div>`;
+      });
     }
   } else {
-    if (depthPlayers.length) {
-      html += `<div class="modal-sec">Depth Chart</div>`;
-      depthPlayers.forEach(p => html += optRow(p, 'depth'));
-    }
-    if (otherPlayers.length) {
-      html += `<div class="modal-sec">${depthPlayers.length?'Everyone Else':'All Players'}</div>`;
-      otherPlayers.forEach(p => html += optRow(p, 'other'));
+    if (available.length) {
+      html += `<div class="modal-sec">Available</div>`;
+      available.forEach(p => {
+        const inn  = getPlayerInnings(p.id);
+        const warn = inn >= INNINGS - 1;
+        html += `<div class="opt-row" onclick="assignPlayer('${p.id}')">
+          <span class="opt-name">${p.name}</span>
+          <div class="opt-right"><div class="opt-inn ${warn?'warn':''}">${inn} inn played</div></div>
+        </div>`;
+      });
     }
   }
 
-  if (!depthPlayers.length && !otherPlayers.length && !allAvailable?.length && !curVal) {
+  if (!available.length && !curVal) {
     html = '<div style="text-align:center;color:var(--gray);font-family:monospace;padding:20px;font-size:0.8rem">Everyone is already assigned.</div>';
   }
 
