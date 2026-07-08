@@ -309,6 +309,10 @@ body {
       <button class="big-btn secondary" style="margin-top:0;flex:1" onclick="setAllAttend(false)">Clear</button>
       <button class="big-btn secondary" style="margin-top:0;flex:1;font-size:0.75rem" onclick="goScreen('roster')">✏️ Edit Roster</button>
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="big-btn secondary" style="margin-top:0;flex:1;font-size:0.72rem" onclick="backupData()">💾 Backup</button>
+      <button class="big-btn secondary" style="margin-top:0;flex:1;font-size:0.72rem" onclick="restoreData()">📥 Restore</button>
+    </div>
     <div class="card" id="attend-list"></div>
   </div>
 </div>
@@ -421,9 +425,15 @@ function getBenchCount()    { return Math.max(0, getActiveRoster().length - POSI
 function pName(id)          { return roster.find(p=>p.id===id)?.name || ''; }
 
 // Get the effective player for inning/pos — carry forward from previous inning
+// Bench slots do NOT carry forward — they're always fresh each inning
+// 'EMPTY' marker means explicitly cleared this inning — stop carry forward
 function getLineupVal(inning, pos) {
+  if (pos.startsWith('BENCH')) {
+    return lineup[inning]?.[pos] || '';
+  }
   for (let i = inning; i >= 1; i--) {
     const v = lineup[i]?.[pos];
+    if (v === 'EMPTY') return ''; // explicitly emptied
     if (v) return v;
   }
   return '';
@@ -592,18 +602,22 @@ function updateDepth(pos,idx,v) { if(!depth[pos])depth[pos]=[]; depth[pos][idx]=
 // ── PITCHING ───────────────────────────────────────────
 function renderPitching() {
   const active = getActiveRoster();
+  // Only show players who are in the depth chart for P
+  const depthPitcherIds = (depth['P'] || []).filter(id => id);
+  const pitchers = active.filter(p => depthPitcherIds.includes(p.id));
   const el = document.getElementById('pitch-list');
-  if (!active.length) {
-    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray);font-family:monospace;font-size:0.8rem">Mark attendance first.</div>';
+  if (!pitchers.length) {
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray);font-family:monospace;font-size:0.8rem">No pitchers in depth chart yet — add players to the P slot in Depth Chart first.</div>';
+    document.getElementById('pitch-banner').innerHTML = '<span class="big">No pitchers set up</span>Go to Depth Chart and add players to the P position first.';
     return;
   }
-  el.innerHTML = active.map(p=>`
+  el.innerHTML = pitchers.map(p=>`
     <div class="card-row ${pitchAvail.has(p.id)?'selected':''}" onclick="togglePitch('${p.id}')">
       <div class="attend-dot"></div>
       <span class="attend-name">${p.name}</span>
     </div>`).join('');
 
-  const n = pitchAvail.size;
+  const n = [...pitchAvail].filter(id => depthPitcherIds.includes(id)).size;
   document.getElementById('pitch-banner').innerHTML = n
     ? `<span class="big">${n} pitcher${n!==1?'s':''} available today</span>These players will appear first when you assign pitcher.`
     : `<span class="big">Who can pitch today?</span>Tap players who are available to throw.`;
@@ -729,6 +743,9 @@ function openPick(pos, inning, out) {
     : (lineup[inning]?.[pos] || '');
   const curName  = curVal ? pName(curVal) : '';
 
+  // Check if value is carried from a previous inning (not explicitly set this inning)
+  const isCarried = !isOut && !pos.startsWith('BENCH') && !lineup[inning]?.[pos] && curVal !== '';
+
   // Depth chart ids for this pos — for pitchers filter by pitchAvail
   const depthIds = (depth[pos]||[]).filter(id=>id);
   const isBench  = pos.startsWith('BENCH');
@@ -740,10 +757,11 @@ function openPick(pos, inning, out) {
   const allAvailable  = isBench ? active.filter(p=>!assigned.has(p.id)&&p.id!==curVal) : null;
 
   let html = '';
+
+  // Always show a clear/empty option if something is assigned
   if (curVal) {
-    html += `<div class="opt-row current" onclick="assignPlayer('')">
-      <span class="opt-name">✓ ${curName}</span>
-      <span class="opt-badge" style="background:#333;color:#888">Clear</span>
+    html += `<div class="clear-row" onclick="assignPlayer('')">
+      ✕ Remove / Leave Empty ${isCarried ? '(carried from previous inning)' : ''}
     </div>`;
   }
 
@@ -788,8 +806,14 @@ function assignPlayer(pid) {
   const {pos, inning, out} = pickCtx;
   if (out === null) {
     if (!lineup[inning]) lineup[inning] = {};
-    if (pid) lineup[inning][pos] = pid;
-    else delete lineup[inning][pos];
+    if (pid) {
+      lineup[inning][pos] = pid;
+    } else {
+      // If value was carried from previous inning, write EMPTY marker to stop carry
+      const wasCarried = !pos.startsWith('BENCH') && !lineup[inning][pos];
+      if (wasCarried) lineup[inning][pos] = 'EMPTY';
+      else delete lineup[inning][pos];
+    }
   } else {
     if (!subs[inning]) subs[inning] = {};
     if (!subs[inning][pos]) subs[inning][pos] = {};
@@ -838,6 +862,33 @@ function renderTracker() {
     if(flag) html+=`<div class="t-flag">${flag}</div>`;
   });
   document.getElementById('tracker-list').innerHTML = html||'<div style="text-align:center;color:var(--gray);font-family:monospace;padding:20px;font-size:0.8rem">Fill out the lineup first.</div>';
+}
+
+// ── BACKUP / RESTORE ───────────────────────────────────
+function backupData() {
+  const data = {
+    roster: roster,
+    depth:  depth,
+    pitch:  [...pitchAvail]
+  };
+  const encoded = btoa(JSON.stringify(data));
+  prompt('Copy this backup code and save it to Notes on your phone:', encoded);
+}
+
+function restoreData() {
+  const code = prompt('Paste your backup code here:');
+  if (!code) return;
+  try {
+    const data = JSON.parse(atob(code));
+    if (data.roster) { roster = data.roster; }
+    if (data.depth)  { depth  = data.depth;  }
+    if (data.pitch)  { pitchAvail = new Set(data.pitch); }
+    save();
+    alert('✅ Restored successfully!');
+    renderAttendance();
+  } catch(e) {
+    alert('❌ Invalid backup code. Please try again.');
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────
