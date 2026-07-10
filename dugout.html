@@ -287,7 +287,7 @@ body {
 <div class="nav-bar">
   <div>
     <div class="nav-title">⚾ Dugout</div>
-    <div class="nav-sub" id="nav-sub">HV Hawks 10U · v2.2</div>
+    <div class="nav-sub" id="nav-sub">HV Hawks 10U · v2.9</div>
   </div>
   <button class="nav-btn primary" onclick="navAction()">Next →</button>
 </div>
@@ -387,24 +387,23 @@ function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch(e) 
 // ── STATE ──────────────────────────────────────────────
 let roster     = load('dg_roster') || Array.from({length:13},()=>({id:uid(),name:''}));
 let attending  = new Set(load('dg_attend') || []);
+let totalInnings = load('dg_innings') || 6;
 let pitchAvail = new Set(load('dg_pitch')  || []);
 let depth      = load('dg_depth')  || {};
-// lineup[inning][pos] = playerId  — main inning lineup
-// subs[inning][pos][out] = playerId  — mid-inning per-position subs
 let lineup     = load('dg_lineup') || {};
 let subs       = load('dg_subs')   || {};
-// which positions have sub panel open
 let openSubs   = {};
 let currentInning = 1;
 let pickCtx    = null;
 
 function save() {
-  localStorage.setItem('dg_roster',  JSON.stringify(roster));
-  localStorage.setItem('dg_attend',  JSON.stringify([...attending]));
-  localStorage.setItem('dg_pitch',   JSON.stringify([...pitchAvail]));
-  localStorage.setItem('dg_depth',   JSON.stringify(depth));
-  localStorage.setItem('dg_lineup',  JSON.stringify(lineup));
-  localStorage.setItem('dg_subs',    JSON.stringify(subs));
+  localStorage.setItem('dg_roster',   JSON.stringify(roster));
+  localStorage.setItem('dg_attend',   JSON.stringify([...attending]));
+  localStorage.setItem('dg_pitch',    JSON.stringify([...pitchAvail]));
+  localStorage.setItem('dg_depth',    JSON.stringify(depth));
+  localStorage.setItem('dg_lineup',   JSON.stringify(lineup));
+  localStorage.setItem('dg_subs',     JSON.stringify(subs));
+  localStorage.setItem('dg_innings',  JSON.stringify(totalInnings));
 }
 
 // ── HELPERS ────────────────────────────────────────────
@@ -413,19 +412,11 @@ function getAllNamed()       { return roster.filter(p => p.name); }
 function getBenchCount()    { return Math.max(0, getActiveRoster().length - POSITIONS.length); }
 function pName(id)          { return roster.find(p=>p.id===id)?.name || ''; }
 
-// Get the effective player for inning/pos — carry forward from previous inning
-// Bench slots do NOT carry forward — they're always fresh each inning
-// 'EMPTY' marker means explicitly cleared this inning — stop carry forward
+// Get the explicit lineup value for this inning only — no carry forward
 function getLineupVal(inning, pos) {
-  if (pos.startsWith('BENCH')) {
-    return lineup[inning]?.[pos] || '';
-  }
-  for (let i = inning; i >= 1; i--) {
-    const v = lineup[i]?.[pos];
-    if (v === 'EMPTY') return ''; // explicitly emptied
-    if (v) return v;
-  }
-  return '';
+  const v = lineup[inning]?.[pos];
+  if (!v || v === 'EMPTY') return '';
+  return v;
 }
 
 // Get sub val for a specific out (carry forward within inning)
@@ -467,7 +458,7 @@ function getAssignedOut(inning, out, excludePos) {
 
 function getPlayerInnings(pid) {
   let count = 0;
-  for (let i = 1; i <= INNINGS; i++) {
+  for (let i = 1; i <= totalInnings; i++) {
     if (POSITIONS.some(p => getLineupVal(i,p) === pid)) count++;
   }
   return count;
@@ -531,7 +522,7 @@ function updateAttendBanner() {
   const el = document.getElementById('attend-banner');
   if (!n) { el.innerHTML = '<span class="big">No players checked in</span>Tap names to mark who\'s here.'; return; }
   if (n <= 9) { el.innerHTML = `<span class="big">${n} players today</span>Full field — no one sits.`; return; }
-  const benched  = (n * INNINGS) - (9 * INNINGS);
+  const benched  = (n * totalInnings) - (9 * totalInnings);
   const evenSit  = Math.floor(benched / n);
   const extra    = benched - (evenSit * n);
   const baseCount = n - extra;
@@ -615,16 +606,49 @@ function togglePitch(id) {
 
 // ── GAME SCREEN ────────────────────────────────────────
 function renderGame() {
-  // inning tabs
   const tabsEl = document.getElementById('inn-tabs');
   tabsEl.innerHTML = '';
-  for (let i=1;i<=INNINGS;i++) {
+  for (let i=1;i<=totalInnings;i++) {
     const filled = POSITIONS.some(p=>lineup[i]?.[p]);
     const btn = document.createElement('button');
     btn.className = `inn-tab ${i===currentInning?'active':''} ${filled&&i!==currentInning?'filled':''}`;
-    btn.textContent = `Inn ${i}`;
+    btn.textContent = i > 6 ? `Inn ${i} ⚡` : `Inn ${i}`;
     btn.onclick = ()=>{ currentInning=i; openSubs={}; renderGame(); };
     tabsEl.appendChild(btn);
+  }
+  // Add inning button
+  const addBtn = document.createElement('button');
+  addBtn.className = 'inn-tab';
+  addBtn.textContent = '+ Inn';
+  addBtn.style.borderColor = 'var(--gold)';
+  addBtn.style.color = 'var(--gold)';
+  addBtn.onclick = () => {
+    totalInnings++;
+    currentInning = totalInnings;
+    openSubs = {};
+    save();
+    renderGame();
+  };
+  tabsEl.appendChild(addBtn);
+
+  // Remove last inning button — only show if > 6 innings
+  if (totalInnings > 6) {
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'inn-tab';
+    removeBtn.textContent = '− Inn';
+    removeBtn.style.borderColor = 'var(--red)';
+    removeBtn.style.color = 'var(--red)';
+    removeBtn.onclick = () => {
+      if (totalInnings <= 6) return;
+      delete lineup[totalInnings];
+      delete subs[totalInnings];
+      totalInnings--;
+      if (currentInning > totalInnings) currentInning = totalInnings;
+      openSubs = {};
+      save();
+      renderGame();
+    };
+    tabsEl.appendChild(removeBtn);
   }
   renderInnField();
 }
@@ -632,15 +656,71 @@ function renderGame() {
 function renderInnField() {
   const el = document.getElementById('inn-field');
   const benchCount = getBenchCount();
+  const allRows = [...POSITIONS, ...Array.from({length:benchCount},(_,i)=>'BENCH'+(i+1))];
+
+  // Figure out who's unassigned — attending but not in any slot this inning
+  const active = getActiveRoster();
+  const assignedIds = new Set(allRows.map(pos => getLineupVal(currentInning, pos)).filter(v=>v));
+  const unassigned = active.filter(p => !assignedIds.has(p.id));
+
   let html = '';
 
+  // Top action buttons
+  html += `<div style="display:flex;gap:8px;margin-bottom:12px">`;
+  if (currentInning > 1) {
+    html += `<button class="big-btn secondary" style="margin:0;flex:1;font-size:0.75rem" onclick="duplicateFromLast()">⬇ Dup Inn ${currentInning - 1}</button>`;
+  }
+  html += `<button class="big-btn secondary" style="margin:0;flex:1;font-size:0.75rem;color:var(--red);border-color:var(--red)" onclick="clearInning()">✕ Clear Inning</button>`;
+  html += `</div>`;
+
+  // Field positions
   POSITIONS.forEach(pos => { html += buildPosRow(pos); });
+
+  // Bench
   if (benchCount > 0) {
     html += '<div class="bench-divider"></div>';
     for (let b=1;b<=benchCount;b++) html += buildPosRow('BENCH'+b);
   }
 
+  // Unassigned section
+  if (unassigned.length > 0) {
+    html += `
+      <div style="margin-top:14px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+        <span style="font-family:monospace;font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--gold)">⚠ Unassigned (${unassigned.length})</span>
+        <div style="flex:1;height:1px;background:#333"></div>
+      </div>
+      ${unassigned.map(p => {
+        const inn  = getPlayerInnings(p.id);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#1a1500;border:1px solid var(--gold);border-radius:8px;margin-bottom:6px">
+          <span style="flex:1;font-size:0.9rem">${p.name}</span>
+          <span style="font-family:monospace;font-size:0.65rem;color:var(--gray)">${inn}inn</span>
+          <span style="font-family:monospace;font-size:0.62rem;color:var(--gold)">not placed</span>
+        </div>`;
+      }).join('')}
+    `;
+  }
+
   el.innerHTML = html;
+}
+
+function duplicateFromLast() {
+  const prev = currentInning - 1;
+  if (prev < 1) return;
+  if (!lineup[currentInning]) lineup[currentInning] = {};
+  const allRows = [...POSITIONS, ...Array.from({length:Math.max(4,getBenchCount())},(_,i)=>'BENCH'+(i+1))];
+  allRows.forEach(pos => {
+    const v = lineup[prev]?.[pos];
+    if (v && v !== 'EMPTY') lineup[currentInning][pos] = v;
+    else delete lineup[currentInning][pos];
+  });
+  save(); renderInnField();
+}
+
+function clearInning() {
+  delete lineup[currentInning];
+  if (subs[currentInning]) delete subs[currentInning];
+  openSubs = {};
+  save(); renderInnField();
 }
 
 function buildPosRow(pos) {
@@ -649,7 +729,7 @@ function buildPosRow(pos) {
   const name    = val ? pName(val) : '';
   const hasSub  = hasSubForPos(currentInning, pos);
   const inn     = val ? getPlayerInnings(val) : 0;
-  const warn    = inn >= INNINGS - 1;
+  const warn    = inn >= totalInnings - 1;
   const label   = isBench ? pos.replace('BENCH','B') : pos;
   const subOpen = openSubs[pos];
 
@@ -716,115 +796,120 @@ function clearSub(pos, inning, out) {
 // ── PICKER MODAL ───────────────────────────────────────
 function openPick(pos, inning, out) {
   pickCtx = {pos, inning, out};
-  const isOut   = out !== null;
-  const posLbl  = pos.startsWith('BENCH') ? pos.replace('BENCH','Bench ') : POS_FULL[pos]||pos;
-  const outLbl  = isOut ? ` · Out ${out}` : '';
+  const isOut  = out !== null;
+  const posLbl = pos.startsWith('BENCH') ? pos.replace('BENCH','Bench ') : POS_FULL[pos]||pos;
+  const outLbl = isOut ? ` · Out ${out}` : '';
   document.getElementById('pick-title').textContent = `${posLbl} · Inn ${inning}${outLbl}`;
 
-  const active   = getActiveRoster();
-  const assigned = isOut ? getAssignedOut(inning,out,pos) : getAssignedInning(inning,pos);
-  const curVal   = isOut
-    ? (subs[inning]?.[pos]?.[out] || '')
-    : (lineup[inning]?.[pos] || '');
-  const curName  = curVal ? pName(curVal) : '';
+  const active  = getActiveRoster();
+  const curVal  = isOut ? (subs[inning]?.[pos]?.[out]||'') : (lineup[inning]?.[pos]||'');
+  const isCarried = !isOut && !lineup[inning]?.[pos] && curVal !== '';
 
-  // Check if value is carried from a previous inning (not explicitly set this inning)
-  const isCarried = !isOut && !pos.startsWith('BENCH') && !lineup[inning]?.[pos] && curVal !== '';
+  // Build map of pid -> which slot they're currently in this inning
+  const allRows = [...POSITIONS, ...Array.from({length: Math.max(4, getBenchCount())},(_,i)=>'BENCH'+(i+1))];
+  const currentSlots = {};
+  allRows.forEach(r => {
+    if (r === pos) return;
+    const v = isOut ? getSubVal(inning, r, out) : getLineupVal(inning, r);
+    if (v && v !== 'EMPTY') currentSlots[v] = r;
+  });
 
-  // Build available list — everyone attending not already assigned
-  const available = active.filter(p => !assigned.has(p.id) && p.id !== curVal);
-  const pitchers  = available.filter(p => pitchAvail.has(p.id));
-  const nonPitchers = available.filter(p => !pitchAvail.has(p.id));
   const isPitcherSlot = pos === 'P';
+  const pitchers    = active.filter(p => pitchAvail.has(p.id));
+  const nonPitchers = active.filter(p => !pitchAvail.has(p.id));
+
+  const buildRow = (p) => {
+    const inn      = getPlayerInnings(p.id);
+    const warn     = inn >= totalInnings - 1;
+    const isCur    = p.id === curVal;
+    const whereNow = currentSlots[p.id];
+    const slotLbl  = whereNow ? (whereNow.startsWith('BENCH') ? 'on bench' : `at ${whereNow}`) : '';
+    return `<div class="opt-row ${isCur?'current':''}" onclick="assignPlayer('${p.id}')">
+      <div style="flex:1">
+        <span class="opt-name">${p.name}${isPitcherSlot && pitchAvail.has(p.id) ? ' ⚾' : ''}</span>
+        ${whereNow && !isCur ? `<div style="font-family:monospace;font-size:0.62rem;color:var(--gold);margin-top:2px">currently ${slotLbl} → will swap</div>` : ''}
+        ${isCur ? `<div style="font-family:monospace;font-size:0.62rem;color:var(--go);margin-top:2px">currently here${isCarried?' (carried)':''}</div>` : ''}
+      </div>
+      <div class="opt-right"><div class="opt-inn ${warn?'warn':''}">${inn}inn</div></div>
+    </div>`;
+  };
 
   let html = '';
-
-  // Always show a clear/empty option if something is assigned
   if (curVal) {
-    html += `<div class="clear-row" onclick="assignPlayer('')">
-      ✕ Remove / Leave Empty ${isCarried ? '(carried from previous inning)' : ''}
-    </div>`;
+    html += `<div class="clear-row" onclick="assignPlayer('')">✕ Remove / Leave Empty${isCarried?' (carried)':''}</div>`;
   }
 
   if (isPitcherSlot && pitchers.length) {
-    html += `<div class="modal-sec">Available to Pitch Today</div>`;
-    pitchers.forEach(p => {
-      const inn  = getPlayerInnings(p.id);
-      const warn = inn >= INNINGS - 1;
-      html += `<div class="opt-row depth-opt" onclick="assignPlayer('${p.id}')">
-        <span class="opt-name">${p.name}</span>
-        <div class="opt-right"><div class="opt-inn ${warn?'warn':''}">${inn} inn played</div></div>
-      </div>`;
-    });
+    html += `<div class="modal-sec">Available to Pitch</div>`;
+    pitchers.forEach(p => { html += buildRow(p); });
     if (nonPitchers.length) {
       html += `<div class="modal-sec">Everyone Else</div>`;
-      nonPitchers.forEach(p => {
-        const inn  = getPlayerInnings(p.id);
-        const warn = inn >= INNINGS - 1;
-        html += `<div class="opt-row" onclick="assignPlayer('${p.id}')">
-          <span class="opt-name">${p.name}</span>
-          <div class="opt-right"><div class="opt-inn ${warn?'warn':''}">${inn} inn played</div></div>
-        </div>`;
-      });
+      nonPitchers.forEach(p => { html += buildRow(p); });
     }
   } else {
-    if (available.length) {
-      html += `<div class="modal-sec">Available</div>`;
-      available.forEach(p => {
-        const inn  = getPlayerInnings(p.id);
-        const warn = inn >= INNINGS - 1;
-        html += `<div class="opt-row" onclick="assignPlayer('${p.id}')">
-          <span class="opt-name">${p.name}</span>
-          <div class="opt-right"><div class="opt-inn ${warn?'warn':''}">${inn} inn played</div></div>
-        </div>`;
-      });
-    }
+    html += `<div class="modal-sec">All Players</div>`;
+    active.forEach(p => { html += buildRow(p); });
   }
 
-  if (!available.length && !curVal) {
-    html = '<div style="text-align:center;color:var(--gray);font-family:monospace;padding:20px;font-size:0.8rem">Everyone is already assigned.</div>';
-  }
+  if (!active.length) html = '<div style="text-align:center;color:var(--gray);font-family:monospace;padding:20px;font-size:0.8rem">Mark attendance first.</div>';
 
   document.getElementById('pick-body').innerHTML = html;
   document.getElementById('pick-modal').classList.add('open');
 }
 
-function optRow(p, badge) {
-  const inn  = getPlayerInnings(p.id);
-  const warn = inn >= INNINGS - 1;
-  return `<div class="opt-row ${badge==='depth'?'depth-opt':''}" onclick="assignPlayer('${p.id}')">
-    <span class="opt-name">${p.name}</span>
-    <div class="opt-right">
-      <span class="opt-badge ${badge}">${badge==='depth'?'Depth':'Other'}</span>
-      <div class="opt-inn ${warn?'warn':''}">${inn} inn played</div>
-    </div>
-  </div>`;
-}
-
 function assignPlayer(pid) {
   if (!pickCtx) return;
   const {pos, inning, out} = pickCtx;
+
   if (out === null) {
     if (!lineup[inning]) lineup[inning] = {};
+
     if (pid) {
+      // Snapshot the full effective lineup for this inning before we change anything
+      const allRows = [
+        ...POSITIONS,
+        ...Array.from({length: Math.max(4, getBenchCount())}, (_,i) => 'BENCH'+(i+1))
+      ];
+
+      // Build effective state: what every slot currently shows
+      const effective = {};
+      allRows.forEach(r => {
+        const v = getLineupVal(inning, r);
+        effective[r] = (v && v !== 'EMPTY') ? v : '';
+      });
+
+      const displaced = effective[pos]; // who we're replacing
+      const theirSlot = allRows.find(r => r !== pos && effective[r] === pid); // where the new pick currently sits
+
+      // Write the new pick into this slot
       lineup[inning][pos] = pid;
+
+      // If the new pick was somewhere else, clear that slot
+      if (theirSlot) {
+        // Their old slot just goes empty — displaced player handles themselves
+        lineup[inning][theirSlot] = 'EMPTY';
+      } else if (displaced && displaced !== pid) {
+        // New pick wasn't in lineup — displaced just loses their spot, goes to unassigned
+        // (no action needed — slot will be empty)
+      }
+
     } else {
-      // If value was carried from previous inning, write EMPTY marker to stop carry
-      const wasCarried = !pos.startsWith('BENCH') && !lineup[inning][pos];
-      if (wasCarried) lineup[inning][pos] = 'EMPTY';
-      else delete lineup[inning][pos];
+      // Clearing a slot
+      delete lineup[inning][pos];
     }
+
   } else {
     if (!subs[inning]) subs[inning] = {};
     if (!subs[inning][pos]) subs[inning][pos] = {};
     if (pid) subs[inning][pos][out] = pid;
     else delete subs[inning][pos][out];
   }
+
   save(); closePick(); renderInnField();
 }
 
-function closePick()      { document.getElementById('pick-modal').classList.remove('open'); pickCtx=null; }
-function closePickBg(e)   { if(e.target.id==='pick-modal') closePick(); }
+function closePick()    { document.getElementById('pick-modal').classList.remove('open'); pickCtx=null; }
+function closePickBg(e) { if(e.target.id==='pick-modal') closePick(); }
 
 // ── TRACKER ────────────────────────────────────────────
 function renderTracker() {
@@ -832,7 +917,7 @@ function renderTracker() {
   const stats  = {};
   active.forEach(p=>stats[p.id]={name:p.name,played:0,sat:0,infield:0,outfield:0});
 
-  for (let i=1;i<=INNINGS;i++) {
+  for (let i=1;i<=totalInnings;i++) {
     const benchCount = getBenchCount();
     POSITIONS.forEach(pos=>{
       const v = getLineupVal(i,pos);
